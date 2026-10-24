@@ -1,5 +1,7 @@
 # Binaries
+cipher
 foundry
+bin/
 *.exe
 *.test
 
