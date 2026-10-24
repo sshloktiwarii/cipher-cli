@@ -42,14 +42,11 @@ No Docker daemon required. Boots in < 500ms with process tree reaping on exit.`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		start := time.Now()
 
-		cyan := color.New(color.FgCyan, color.Bold).SprintFunc()
 		green := color.New(color.FgGreen, color.Bold).SprintFunc()
 		yellow := color.New(color.FgYellow, color.Bold).SprintFunc()
 		magenta := color.New(color.FgMagenta, color.Bold).SprintFunc()
 
-		fmt.Println(cyan("\n=================================================="))
-		fmt.Println(cyan("🛡️  CIPHER EDGE APPLIANCE — IN-PROCESS SUPERVISOR"))
-		fmt.Println(cyan("=================================================="))
+		printBootBanner()
 
 		// 1. Ensure socket directory exists and clean stale sockets
 		if err := os.MkdirAll(applianceSocketDir, 0700); err != nil {
@@ -279,6 +276,37 @@ func findWorkspaceRoot() (string, error) {
 		curr = parent
 	}
 	return cwd, nil
+}
+
+func printBootBanner() {
+	banner := []string{
+		"  ██████╗██╗██████╗ ██╗  ██╗███████╗██████╗       █████╗ ██╗",
+		" ██╔════╝██║██╔══██╗██║  ██║██╔════╝██╔══██╗     ██╔══██╗██║",
+		" ██║     ██║██████╔╝███████║█████╗  ██████╔╝█████╗███████║██║",
+		" ██║     ██║██╔═══╝ ██╔══██║██╔══╝  ██╔══██╗╚════╝██╔══██║██║",
+		" ╚██████╗██║██║     ██║  ██║███████╗██║  ██║      ██║  ██║██║",
+		"  ╚═════╝╚═╝╚═╝     ╚═╝  ╚═╝╚══════╝╚═╝  ╚═╝      ╚═╝  ╚═╝╚═╝",
+	}
+
+	cyan := color.New(color.FgCyan, color.Bold).SprintFunc()
+	hiCyan := color.New(color.FgHiCyan, color.Bold).SprintFunc()
+	white := color.New(color.FgHiWhite, color.Bold).SprintFunc()
+	gray := color.New(color.FgHiBlack).SprintFunc()
+
+	fmt.Print("\n")
+	for _, line := range banner {
+		fmt.Println(hiCyan(line))
+		time.Sleep(15 * time.Millisecond)
+	}
+
+	fmt.Println(gray(" ─────────────────────────────────────────────────────────────────"))
+	fmt.Printf(" %s  %s  %s\n",
+		white("CIPHER AI PAAS"),
+		cyan("[ ZERO-DEPENDENCY AUTONOMOUS EDGE APPLIANCE ]"),
+		gray("v1.0.0"),
+	)
+	fmt.Println(gray(" ─────────────────────────────────────────────────────────────────\n"))
+	time.Sleep(25 * time.Millisecond)
 }
 
 func init() {

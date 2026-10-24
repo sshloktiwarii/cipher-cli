@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="assets/header.svg" width="100%" alt="Cipher Header Banner" />
+</p>
+
 # Cipher
 
 Edge-native runtime supervision, persistent memory indexing, and security boundaries for local AI execution.
