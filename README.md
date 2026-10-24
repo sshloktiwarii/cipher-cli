@@ -23,12 +23,30 @@ Attaches to all running containers and multiplexes their stdout/stderr streams i
 ### 3. `cipher status`
 Displays the port mappings, container runtime state, and HTTP health status across the entire fleet.
 
-### 4. `cipher halt`
+### 4. `cipher doctor`
+Audits host resources, Docker daemon socket availability, port collisions across 8079-8085, and RAM availability for Apple Silicon unified memory or Linux hosts.
+
+### 5. `cipher test --synthetic`
+Executes end-to-end integration tests asserting the 4 core platform invariants:
+- **Gate 1**: `cipher-sec` (:8079) credential intercept and Shannon entropy redaction.
+- **Gate 2**: `cipher-exec` (:8081) Seatbelt process ceiling and runaway compute termination.
+- **Gate 3**: `cipher-log` (:8082) SQLite WAL telemetry ingestion and event persistence.
+- **Gate 4**: `cipher-mem` (:8083) sub-millisecond semantic search and Obsidian incident backlink resolution.
+
+### 6. `cipher halt`
 Gracefully halts and dismantles all running fleet containers and purges ephemeral network bridges.
 
-## Building the Binary
+## Zero-Dependency Distribution
+Compile all Go microservices (`cipher-route`, `cipher-log`, `cipher-mem`, `cipher-cli`, `cipher-sec`) for `darwin-arm64` and `linux-amd64` using `CGO_ENABLED=0`, and package standalone Python executables (`cipher-core`, `cipher-exec`):
+```bash
+./scripts/build_distribution.sh
+```
+
+## Building the Binary Locally
 ```bash
 go mod tidy
 go build -o cipher .
 ./cipher status
+./cipher test --synthetic
 ```
+
