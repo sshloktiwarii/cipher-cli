@@ -52,14 +52,15 @@ No Docker daemon required. Boots in < 500ms with process tree reaping on exit.`,
 		fmt.Println(cyan("=================================================="))
 
 		// 1. Ensure socket directory exists and clean stale sockets
-		if err := os.MkdirAll(applianceSocketDir, 0755); err != nil {
+		if err := os.MkdirAll(applianceSocketDir, 0700); err != nil {
 			return fmt.Errorf("failed to create socket directory %s: %w", applianceSocketDir, err)
 		}
+		_ = os.Chmod(applianceSocketDir, 0700)
 		staleSockets, _ := filepath.Glob(filepath.Join(applianceSocketDir, "*.sock"))
 		for _, s := range staleSockets {
 			_ = os.Remove(s)
 		}
-		fmt.Printf("%s Initialized IPC Socket Cage at %s\n", green("✓"), applianceSocketDir)
+		fmt.Printf("%s Initialized IPC Socket Cage at %s (0700 boundary)\n", green("✓"), applianceSocketDir)
 
 		// 2. Discover workspace root
 		rootDir, err := findWorkspaceRoot()
@@ -76,6 +77,7 @@ No Docker daemon required. Boots in < 500ms with process tree reaping on exit.`,
 			{Name: "cipher-mem", DirName: "cipher-mem", SocketName: "mem.sock", Color: color.New(color.FgBlue)},
 			{Name: "cipher-exec", DirName: "cipher-exec", SocketName: "exec.sock", Color: color.New(color.FgYellow)},
 			{Name: "cipher-mcp", DirName: "cipher-mcp", SocketName: "mcp.sock", Color: color.New(color.FgCyan)},
+			{Name: "cipher-core", DirName: "cipher-core", SocketName: "core.sock", Color: color.New(color.FgWhite)},
 			{Name: "cipher-route", DirName: "cipher-route", SocketName: "", Color: color.New(color.FgGreen)},
 		}
 
@@ -142,11 +144,22 @@ No Docker daemon required. Boots in < 500ms with process tree reaping on exit.`,
 
 			if svc.SocketName != "" {
 				sockPath := filepath.Join(applianceSocketDir, svc.SocketName)
-				fmt.Printf("%s Started %-14s ➔ %s\n", green("✓"), svc.Name, sockPath)
+				fmt.Printf("%s Started %-14s ➔ %s (0600 perms)\n", green("✓"), svc.Name, sockPath)
 			} else {
 				fmt.Printf("%s Started %-14s ➔ Ingress :%s\n", green("✓"), svc.Name, appliancePort)
 			}
 		}
+
+		// Enforce 0600 permissions on all spawned sockets
+		go func() {
+			for i := 0; i < 30; i++ {
+				time.Sleep(100 * time.Millisecond)
+				socks, _ := filepath.Glob(filepath.Join(applianceSocketDir, "*.sock"))
+				for _, s := range socks {
+					_ = os.Chmod(s, 0600)
+				}
+			}
+		}()
 
 		// Wait briefly to verify router socket connectivity
 		time.Sleep(350 * time.Millisecond)
@@ -169,50 +182,60 @@ No Docker daemon required. Boots in < 500ms with process tree reaping on exit.`,
 	},
 }
 
+func getExecutableOrGoRun(ctx context.Context, dir, binaryName string, args ...string) *exec.Cmd {
+	binaryPath := filepath.Join(dir, binaryName)
+	if _, err := os.Stat(binaryPath); err == nil {
+		c := exec.CommandContext(ctx, binaryPath, args...)
+		c.Dir = dir
+		return c
+	}
+	goArgs := append([]string{"run", "."}, args...)
+	c := exec.CommandContext(ctx, "go", goArgs...)
+	c.Dir = dir
+	return c
+}
+
 func buildServiceCommand(ctx context.Context, svc *ManagedService, dir, socketDir, vaultPath, port string) *exec.Cmd {
 	socketPath := filepath.Join(socketDir, svc.SocketName)
 
 	var c *exec.Cmd
 	switch svc.Name {
 	case "cipher-log":
-		c = exec.CommandContext(ctx, "go", "run", ".",
+		c = getExecutableOrGoRun(ctx, dir, "cipher-log",
 			"--low-mem",
 			"--sqlite-path", filepath.Join(dir, "telemetry.db"),
 			"--socket", socketPath,
 			"--port", "8082",
 		)
 	case "cipher-sec":
-		c = exec.CommandContext(ctx, "go", "run", ".",
+		c = getExecutableOrGoRun(ctx, dir, "cipher-sec",
 			"-socket", socketPath,
 			"-port", "8079",
 		)
 	case "cipher-mem":
-		c = exec.CommandContext(ctx, "go", "run", ".",
+		c = getExecutableOrGoRun(ctx, dir, "cipher-mem",
 			"--vault", filepath.Join(dir, "sample_vault"),
 			"--socket", socketPath,
 			"--port", "8083",
 		)
 	case "cipher-exec":
-		venvUvicorn := filepath.Join(dir, ".venv", "bin", "uvicorn")
-		if _, err := os.Stat(venvUvicorn); err == nil {
-			c = exec.CommandContext(ctx, venvUvicorn, "server:app", "--port", "8081", "--host", "0.0.0.0")
-		} else {
-			c = exec.CommandContext(ctx, "uvicorn", "server:app", "--port", "8081", "--host", "0.0.0.0")
-		}
+		c = getExecutableOrGoRun(ctx, dir, "cipher-exec",
+			"--port", "8081",
+			"--socket", socketPath,
+		)
 	case "cipher-mcp":
-		distCJS := filepath.Join(dir, "dist", "cipher-mcp.cjs")
-		if _, err := os.Stat(distCJS); err == nil {
-			c = exec.CommandContext(ctx, "node", distCJS)
-		} else {
-			distJS := filepath.Join(dir, "dist", "cipher-mcp.js")
-			if _, err := os.Stat(distJS); err == nil {
-				c = exec.CommandContext(ctx, "node", distJS)
-			} else {
-				c = exec.CommandContext(ctx, "node", "src/index.ts")
-			}
-		}
+		c = getExecutableOrGoRun(ctx, dir, "cipher-mcp",
+			"--port", "8085",
+			"--socket", socketPath,
+			"--db", filepath.Join(dir, "pending_actions.db"),
+		)
+	case "cipher-core":
+		c = getExecutableOrGoRun(ctx, dir, "cipher-core",
+			"--poll-interval", "2s",
+			"--socket", socketPath,
+		)
 	case "cipher-route":
-		c = exec.CommandContext(ctx, "go", "run", ".")
+		c = getExecutableOrGoRun(ctx, dir, "cipher-route")
 		c.Env = append(os.Environ(),
 			"PORT="+port,
 			"TELEMETRY_ENDPOINT=http://localhost:8082/ingest",
@@ -221,9 +244,6 @@ func buildServiceCommand(ctx context.Context, svc *ManagedService, dir, socketDi
 		return nil
 	}
 
-	if c != nil {
-		c.Dir = dir
-	}
 	return c
 }
 

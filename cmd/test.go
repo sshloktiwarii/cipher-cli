@@ -7,6 +7,7 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -17,6 +18,21 @@ import (
 var (
 	flagSynthetic bool
 )
+
+func getSessionToken() string {
+	if custom := os.Getenv("CIPHER_AUTH_TOKEN"); custom != "" {
+		return custom
+	}
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return ""
+	}
+	data, err := os.ReadFile(filepath.Join(home, ".cipher", "token"))
+	if err != nil {
+		return ""
+	}
+	return strings.TrimSpace(string(data))
+}
 
 var testCmd = &cobra.Command{
 	Use:   "test",
@@ -159,11 +175,26 @@ var testCmd = &cobra.Command{
 		fmt.Println(bold("\n[GATE 4] Verifying Cryptographic Merkle Hash Chain (cipher-log :8082 / :8080)..."))
 		start4 := time.Now()
 		auditURL := "http://localhost:8080/api/log/verify-audit-chain"
-		logResp, err := client.Get(auditURL)
-		if err != nil {
-			// Fallback to direct port
-			auditURL = "http://localhost:8082/verify-audit-chain"
-			logResp, err = client.Get(auditURL)
+		req, _ := http.NewRequest(http.MethodGet, auditURL, nil)
+		if token := getSessionToken(); token != "" {
+			req.Header.Set("Authorization", "Bearer "+token)
+		}
+		logResp, err := client.Do(req)
+		if err != nil || (logResp != nil && logResp.StatusCode >= 400) {
+			if logResp != nil {
+				_ = logResp.Body.Close()
+			}
+			auditURL = "http://localhost:8080/verify-audit-chain"
+			req2, _ := http.NewRequest(http.MethodGet, auditURL, nil)
+			logResp, err = client.Do(req2)
+			if err != nil || (logResp != nil && logResp.StatusCode >= 400) {
+				if logResp != nil {
+					_ = logResp.Body.Close()
+				}
+				auditURL = "http://localhost:8082/verify-audit-chain"
+				req3, _ := http.NewRequest(http.MethodGet, auditURL, nil)
+				logResp, err = client.Do(req3)
+			}
 		}
 		if err != nil {
 			fmt.Printf("   %s Connection failed to cipher-log audit chain: %v\n", red("✗"), err)
