@@ -1,35 +1,34 @@
-# Foundry CLI: The Fleet Commander & Control Plane
+# cipher-cli: The Fleet Commander & Control Plane
 
-A unified command-line control plane written in Go with `spf13/cobra` that manages the entire lifecycle of the Foundry Local AI PaaS—networking, container orchestration, and multiplexed colored telemetry.
+A unified command-line control plane written in Go with `spf13/cobra` that manages the entire lifecycle of the Cipher Local AI PaaS—networking, container orchestration, and multiplexed colored telemetry.
 
 ## Commands
 
-### 1. `foundry up`
+### 1. `cipher up`
 Programmatically generates the unified `docker-compose.yml` merging:
-- `foundry-sentinel` (`:8079`)
-- `foundry-router` (`:8080`)
-- `foundry-crucible` (`:8081`)
-- `foundry-pulse` (`:8082`)
-- `foundry-graph` (`:8083`)
-- `foundry-airgap` (`:8085`)
+- `cipher-sec` (`:8079`)
+- `cipher-route` (`:8080`)
+- `cipher-exec` (`:8081`)
+- `cipher-log` (`:8082`)
+- `cipher-mem` (`:8083`)
+- `cipher-mcp` (`:8085`)
 - `timescaledb` (`:5432`)
 - `redis` (`:6379`)
 
-Spins up all containers in detached mode connected through the internal bridge network `foundry_net`.
+Spins up all containers in detached mode connected through the internal bridge network `cipher_net`.
 
-### 2. `foundry logs`
+### 2. `cipher logs`
 Attaches to all running containers and multiplexes their stdout/stderr streams into a single terminal window with dedicated ANSI color codes per microservice.
 
-### 3. `foundry status`
+### 3. `cipher status`
 Displays the port mappings, container runtime state, and HTTP health status across the entire fleet.
 
-### 4. `foundry halt`
-Gracefully stops and removes all containers and network bridges.
+### 4. `cipher halt`
+Gracefully halts and dismantles all running fleet containers and purges ephemeral network bridges.
 
-## Building and Installing
+## Building the Binary
 ```bash
 go mod tidy
-go build -o foundry main.go
-# Optional: install to PATH
-sudo mv foundry /usr/local/bin/
+go build -o cipher .
+./cipher status
 ```

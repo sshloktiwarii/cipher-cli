@@ -9,11 +9,11 @@ import (
 )
 
 var rootCmd = &cobra.Command{
-	Use:   "foundry",
-	Short: "Foundry CLI — Fleet Commander and Control Plane for the Foundry AI PaaS",
-	Long: `Foundry CLI orchestrates the full lifecycle of the Foundry Local-First AI PaaS.
+	Use:   "cipher",
+	Short: "Cipher CLI — Fleet Commander and Control Plane for the Cipher AI PaaS",
+	Long: `Cipher CLI orchestrates the full lifecycle of the Cipher Local-First AI PaaS.
 It programmatically controls networking, container execution, and unified log aggregation
-across all 8 platform services on the custom foundry_net bridge network.`,
+across all 8 platform services on the custom cipher_net bridge network.`,
 }
 
 func Execute() {

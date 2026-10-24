@@ -1,6 +1,6 @@
 package main
 
-import "github.com/sshloktiwarii/foundry-cli/cmd"
+import "github.com/sshloktiwarii/cipher-cli/cmd"
 
 func main() {
 	cmd.Execute()

@@ -6,19 +6,19 @@ import (
 	"path/filepath"
 )
 
-// GenerateComposeSpec produces the master docker-compose.yml content for the Foundry fleet
+// GenerateComposeSpec produces the master docker-compose.yml content for the Cipher fleet
 func GenerateComposeSpec() string {
 	return `version: '3.8'
 
 networks:
-  foundry_net:
+  cipher_net:
     driver: bridge
-    name: foundry_net
+    name: cipher_net
 
 services:
   timescaledb:
     image: timescale/timescaledb:latest-pg16
-    container_name: foundry-timescaledb
+    container_name: cipher-timescaledb
     environment:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: password
@@ -26,107 +26,107 @@ services:
     ports:
       - "5432:5432"
     networks:
-      - foundry_net
+      - cipher_net
     restart: unless-stopped
 
   redis:
     image: redis:7-alpine
-    container_name: foundry-redis
+    container_name: cipher-redis
     ports:
       - "6379:6379"
     networks:
-      - foundry_net
+      - cipher_net
     restart: unless-stopped
 
-  foundry-sentinel:
+  cipher-sec:
     build:
-      context: ../foundry-sentinel
-    container_name: foundry-sentinel
+      context: ../cipher-sec
+    container_name: cipher-sec
     ports:
       - "8079:8079"
     environment:
       - PORT=8079
-      - TARGET_URL=http://foundry-router:8080
+      - TARGET_URL=http://cipher-route:8080
     networks:
-      - foundry_net
+      - cipher_net
     depends_on:
-      - foundry-router
+      - cipher-route
     restart: unless-stopped
 
-  foundry-router:
+  cipher-route:
     build:
-      context: ../foundry-router
-    container_name: foundry-router
+      context: ../cipher-route
+    container_name: cipher-route
     ports:
       - "8080:8080"
     environment:
       - PORT=8080
       - REDIS_ADDR=redis:6379
-      - TELEMETRY_ENDPOINT=http://foundry-pulse:8082/ingest
+      - TELEMETRY_ENDPOINT=http://cipher-log:8082/ingest
     networks:
-      - foundry_net
+      - cipher_net
     depends_on:
       - redis
-      - foundry-pulse
+      - cipher-log
     restart: unless-stopped
 
-  foundry-crucible:
+  cipher-exec:
     build:
-      context: ../foundry-crucible
-    container_name: foundry-crucible
+      context: ../cipher-exec
+    container_name: cipher-exec
     ports:
       - "8081:8081"
     environment:
       - PORT=8081
-      - TELEMETRY_ENDPOINT=http://foundry-pulse:8082/ingest
+      - TELEMETRY_ENDPOINT=http://cipher-log:8082/ingest
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
     networks:
-      - foundry_net
+      - cipher_net
     depends_on:
-      - foundry-pulse
+      - cipher-log
     restart: unless-stopped
 
-  foundry-pulse:
+  cipher-log:
     build:
-      context: ../foundry-pulse
-    container_name: foundry-pulse
+      context: ../cipher-log
+    container_name: cipher-log
     ports:
       - "8082:8082"
     environment:
       - PORT=8082
       - DATABASE_URL=postgres://postgres:password@timescaledb:5432/telemetry?sslmode=disable
     networks:
-      - foundry_net
+      - cipher_net
     depends_on:
       - timescaledb
     restart: unless-stopped
 
-  foundry-graph:
+  cipher-mem:
     build:
-      context: ../foundry-graph
-    container_name: foundry-graph
+      context: ../cipher-mem
+    container_name: cipher-mem
     ports:
       - "8083:8083"
     environment:
       - PORT=8083
       - VAULT_PATH=/vault
     volumes:
-      - ../foundry-graph/sample_vault:/vault
+      - ../cipher-mem/sample_vault:/vault
     networks:
-      - foundry_net
+      - cipher_net
     restart: unless-stopped
 
-  foundry-airgap:
+  cipher-mcp:
     build:
-      context: ../foundry-airgap
-    container_name: foundry-airgap
+      context: ../cipher-mcp
+    container_name: cipher-mcp
     ports:
       - "8085:8085"
     environment:
       - HITL_PORT=8085
     networks:
-      - foundry_net
+      - cipher_net
     restart: unless-stopped
 `
 }

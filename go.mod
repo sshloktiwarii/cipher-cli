@@ -1,4 +1,4 @@
-module github.com/sshloktiwarii/foundry-cli
+module github.com/sshloktiwarii/cipher-cli
 
 go 1.24
 

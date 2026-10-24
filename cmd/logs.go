@@ -22,20 +22,20 @@ type ServiceColor struct {
 
 var logsCmd = &cobra.Command{
 	Use:   "logs",
-	Short: "Attaches to and multiplexes colored stdout/stderr streams from all Foundry services",
+	Short: "Attaches to and multiplexes colored stdout/stderr streams from all Cipher services",
 	RunE: func(cmd *cobra.Command, args []string) error {
 		services := []ServiceColor{
-			{"foundry-sentinel", "[SENTINEL]", color.New(color.FgHiRed, color.Bold)},
-			{"foundry-router", "[ROUTER]  ", color.New(color.FgCyan, color.Bold)},
-			{"foundry-crucible", "[CRUCIBLE]", color.New(color.FgMagenta, color.Bold)},
-			{"foundry-pulse", "[PULSE]   ", color.New(color.FgBlue, color.Bold)},
-			{"foundry-graph", "[GRAPH]   ", color.New(color.FgGreen, color.Bold)},
-			{"foundry-airgap", "[AIRGAP]  ", color.New(color.FgYellow, color.Bold)},
-			{"foundry-timescaledb", "[DB]      ", color.New(color.FgWhite)},
-			{"foundry-redis", "[REDIS]   ", color.New(color.FgHiBlack)},
+			{"cipher-sec", "[CIPHER-SEC]  ", color.New(color.FgHiRed, color.Bold)},
+			{"cipher-route", "[CIPHER-ROUTE]", color.New(color.FgCyan, color.Bold)},
+			{"cipher-exec", "[CIPHER-EXEC] ", color.New(color.FgMagenta, color.Bold)},
+			{"cipher-log", "[CIPHER-LOG]  ", color.New(color.FgBlue, color.Bold)},
+			{"cipher-mem", "[CIPHER-MEM]  ", color.New(color.FgGreen, color.Bold)},
+			{"cipher-mcp", "[CIPHER-MCP]  ", color.New(color.FgYellow, color.Bold)},
+			{"cipher-timescaledb", "[DB]          ", color.New(color.FgWhite)},
+			{"cipher-redis", "[REDIS]       ", color.New(color.FgHiBlack)},
 		}
 
-		fmt.Println(color.CyanString("⚡ [FOUNDRY CLI] Multiplexing Fleet Telemetry & Logs (Ctrl+C to detach)..."))
+		fmt.Println(color.CyanString("⚡ [CIPHER CLI] Multiplexing Fleet Telemetry & Logs (Ctrl+C to detach)..."))
 
 		var wg sync.WaitGroup
 		ctxStop := make(chan os.Signal, 1)
@@ -43,41 +43,43 @@ var logsCmd = &cobra.Command{
 
 		for _, svc := range services {
 			wg.Add(1)
-			go func(sc ServiceColor) {
+			go func(s ServiceColor) {
 				defer wg.Done()
-				tailContainerLogs(sc)
+				dockerCmd := exec.Command("docker", "logs", "-f", "--tail", "10", s.Name)
+
+				stdout, err := dockerCmd.StdoutPipe()
+				if err != nil {
+					return
+				}
+				stderr, err := dockerCmd.StderrPipe()
+				if err != nil {
+					return
+				}
+
+				if err := dockerCmd.Start(); err != nil {
+					return
+				}
+
+				readLines := func(r io.Reader) {
+					scanner := bufio.NewScanner(r)
+					for scanner.Scan() {
+						line := scanner.Text()
+						fmt.Printf("%s %s\n", s.Color.Sprint(s.Prefix), line)
+					}
+				}
+
+				go readLines(stdout)
+				go readLines(stderr)
+
+				<-ctxStop
+				if dockerCmd.Process != nil {
+					_ = dockerCmd.Process.Kill()
+				}
 			}(svc)
 		}
 
 		<-ctxStop
-		fmt.Println(color.YellowString("\nDetached from fleet logs."))
+		fmt.Println("\n" + color.YellowString("Detached from Cipher log stream."))
 		return nil
 	},
-}
-
-func tailContainerLogs(sc ServiceColor) {
-	cmd := exec.Command("docker", "logs", "-f", "--tail", "20", sc.Name)
-	stdout, err := cmd.StdoutPipe()
-	if err != nil {
-		return
-	}
-	cmd.Stderr = cmd.Stdout
-
-	if err := cmd.Start(); err != nil {
-		return
-	}
-
-	reader := bufio.NewReader(stdout)
-	for {
-		line, err := reader.ReadString('\n')
-		if err != nil {
-			if err != io.EOF {
-				_ = err
-			}
-			break
-		}
-		prefix := sc.Color.Sprintf("%s", sc.Prefix)
-		fmt.Printf("%s %s", prefix, line)
-	}
-	_ = cmd.Wait()
 }
