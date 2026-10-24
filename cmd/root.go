@@ -28,4 +28,5 @@ func init() {
 	rootCmd.AddCommand(haltCmd)
 	rootCmd.AddCommand(logsCmd)
 	rootCmd.AddCommand(statusCmd)
+	rootCmd.AddCommand(doctorCmd)
 }
