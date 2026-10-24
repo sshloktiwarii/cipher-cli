@@ -1,0 +1,13 @@
+# Binaries
+foundry
+*.exe
+*.test
+
+# Docker compose artifacts
+docker-compose.yml
+docker-compose.override.yml
+
+# Environment & OS
+.env
+.env.*
+.DS_Store
