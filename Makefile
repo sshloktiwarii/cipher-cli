@@ -43,8 +43,9 @@ build-go:
 
 build-mcp:
 	@echo "📦 [2/3] Bundling MCP Server with esbuild..."
-	@cd "$(ROOT_DIR)/cipher-mcp" && npx esbuild src/index.ts --bundle --platform=node --outfile=dist/cipher-mcp.js
-	@echo "✓ Stateless MCP Server bundled into standalone dist/cipher-mcp.js."
+	@cd "$(ROOT_DIR)/cipher-mcp" && npx esbuild src/index.ts --bundle --platform=node --format=esm --outfile=dist/cipher-mcp.js
+	@cd "$(ROOT_DIR)/cipher-mcp" && npx esbuild src/index.ts --bundle --platform=node --format=cjs --outfile=dist/cipher-mcp.cjs
+	@echo "✓ Stateless MCP Server bundled into standalone dist/cipher-mcp.js & dist/cipher-mcp.cjs."
 
 build-core:
 	@echo "🧠 [3/3] Packaging Python Orchestrator with PyInstaller..."
