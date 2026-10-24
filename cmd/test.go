@@ -155,9 +155,39 @@ var testCmd = &cobra.Command{
 			allPassed = false
 		}
 
+		// Phase 4: Test cipher-log Cryptographic Merkle Tree Hash Chain
+		fmt.Println(bold("\n[GATE 4] Verifying Cryptographic Merkle Hash Chain (cipher-log :8082 / :8080)..."))
+		start4 := time.Now()
+		auditURL := "http://localhost:8080/api/log/verify-audit-chain"
+		logResp, err := client.Get(auditURL)
+		if err != nil {
+			// Fallback to direct port
+			auditURL = "http://localhost:8082/verify-audit-chain"
+			logResp, err = client.Get(auditURL)
+		}
+		if err != nil {
+			fmt.Printf("   %s Connection failed to cipher-log audit chain: %v\n", red("✗"), err)
+			allPassed = false
+		} else {
+			defer logResp.Body.Close()
+			body, _ := io.ReadAll(logResp.Body)
+			var res map[string]interface{}
+			_ = json.Unmarshal(body, &res)
+			status, _ := res["status"].(string)
+			proof, _ := res["cryptographic_proof"].(string)
+			tampered, _ := res["tampered"].(bool)
+
+			if status == "VERIFIED_INTEGRITY" && !tampered {
+				fmt.Printf("   %s Gate 4 PASSED: Merkle chain verified untampered (%s) in %v\n", green("✓"), proof, time.Since(start4))
+			} else {
+				fmt.Printf("   %s Gate 4 FAILED: Cryptographic integrity failure! Body: %s\n", red("✗"), string(body))
+				allPassed = false
+			}
+		}
+
 		fmt.Println(bold("\n==================================================================="))
 		if allPassed {
-			fmt.Println(green("🎉 SYNTHETIC FLEET INTEGRATION TEST PASSED (All verification phases satisfied)\n"))
+			fmt.Println(green("🎉 SYNTHETIC FLEET INTEGRATION TEST PASSED (All 4 verification gates satisfied)\n"))
 			os.Exit(0)
 		} else {
 			fmt.Println(red("❌ SYNTHETIC FLEET INTEGRATION TEST FAILED — See failed gate details above.\n"))
