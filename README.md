@@ -1,45 +1,41 @@
-# 🛡️ Cipher AI PaaS — The Edge-Native Autonomous AI Operating System
+# Cipher
 
-[![Language](https://img.shields.io/badge/Language-Go%201.24-00ADD8?style=flat-square&logo=go)](https://go.dev/)
-[![Status](https://img.shields.io/badge/Status-Production%20Ready%20(10%2F10)-brightgreen?style=flat-square)](#)
-[![Dependencies](https://img.shields.io/badge/Dependencies-Zero%20(No%20Docker%2C%20No%20Python%2C%20No%20Node)-blueviolet?style=flat-square)](#)
-[![License](https://img.shields.io/badge/License-MIT-orange?style=flat-square)](LICENSE)
+Edge-native runtime supervision, persistent memory indexing, and security boundaries for local AI execution.
 
-**Cipher** is a zero-dependency, edge-native autonomous AI platform. It acts as an automated safety cage, memory bank, and immune system for local AI agents (Ollama, Claude, Cursor, Antigravity)—blocking credential leaks, killing runaway compute loops, remembering incident resolutions, and proving tamper-resistance via cryptographic Merkle trees.
+Cipher packages an 8-service local AI infrastructure into a single standalone Go binary. It provides credential redaction, kernel-level execution timeouts, vector memory lookup, and cryptographic audit logging over Unix domain sockets behind a single HTTP port.
 
----
-
-### 💡 For Non-Techies: What is Cipher in Plain English?
-
-> Think of Cipher as an **airbag and flight recorder for AI running on your personal computer**.
->
-> When you run modern AI tools locally, several risky things happen:
-> - **They can leak secrets:** An AI might accidentally upload your private API keys, passwords, or personal documents to the internet.
-> - **They can freeze your computer:** An AI writing code can trigger an infinite loop that consumes 100% of your computer's CPU and RAM until your system crashes.
-> - **They forget everything:** AI models have no persistent memory—they don't remember how you solved a bug yesterday.
-> - **Installation is painful:** Traditional AI platforms force you to install Python, Docker, Node.js, and gigabytes of complex packages.
->
-> **How Cipher solves this:**
-> 1. 🛡️ **Zero Leaks**: It spots and blacks out passwords in **1.4 milliseconds** before they can ever leave your machine.
-> 2. ⏱️ **Automatic Kill-Switch**: If AI code gets stuck in an infinite loop, Cipher pulls the plug within **3 seconds**.
-> 3. 🧠 **Permanent Private Memory**: Connects to your Obsidian notes folder to find relevant solutions in under **1 millisecond**.
-> 4. 🚀 **Zero Installs**: The entire 8-service system compiles into a **single 35MB program**. You download it, run `cipher appliance`, and it boots in **30 milliseconds**. Zero Docker, zero Python, zero Node.js.
+Looking for a plain-English, non-technical summary? See [EXPLAINER.md](EXPLAINER.md).
 
 ---
 
-## ⚡ 1-Minute Quickstart
+## Technical Invariants
 
-### Option A: Homebrew (macOS & Linux)
+* **Zero external runtime dependencies**: The entire cluster is written in Go. No Docker daemon, Python virtual environments, or Node.js runtime required on the host.
+* **Single-port ingress**: The cluster exposes port `8080`. All internal communication between the 8 services runs over Unix domain sockets in `/tmp/cipher/*.sock` with `0600` file permissions.
+* **Kernel execution boundaries**: Code execution runs inside Apple Seatbelt profiles on macOS and Linux namespaces/cgroups, enforcing network isolation and a hard 3-second process termination ceiling.
+* **Cryptographic integrity**: Telemetry and incident events are committed to an append-only SQLite WAL ledger and chained into a SHA-256 Merkle tree.
+* **Local-first authentication**: Generates a 256-bit cryptographic token in `~/.cipher/token` (`0600` permissions) on initial startup. HTTP routes require `Authorization: Bearer <token>`.
+
+---
+
+## Installation
+
+### Homebrew (macOS / Linux)
+
 ```bash
 brew install sshloktiwarii/tap/cipher
 ```
 
-### Option B: One-Line Installer
+### Install Script
+
 ```bash
 curl -fsSL https://raw.githubusercontent.com/sshloktiwarii/cipher-cli/master/scripts/install.sh | bash
 ```
 
-### Option C: Build from Source
+### Build from Source
+
+Requires Go 1.22+.
+
 ```bash
 git clone https://github.com/sshloktiwarii/cipher-cli.git
 cd cipher-cli
@@ -48,150 +44,127 @@ go build -o cipher .
 
 ---
 
-## 🚀 Running the Cluster
+## Usage
 
-### Start the Entire 8-Service Appliance (Single Supervised Command)
+### Start Appliance
+
+Boots all 8 services in a single supervised process:
+
 ```bash
 cipher appliance
 ```
-*Boots the full cluster on Unix Domain Sockets in `< 500ms`, exposing only port `:8080`:*
+
+Outputs:
+
 ```text
 ==================================================
-🛡️  CIPHER EDGE APPLIANCE — IN-PROCESS SUPERVISOR
+CIPHER APPLIANCE SUPERVISOR
 ==================================================
-✓ Initialized IPC Socket Cage at /tmp/cipher (0700 boundary)
-✓ Started cipher-log     ➔ /tmp/cipher/log.sock (0600 perms)
-✓ Started cipher-sec     ➔ /tmp/cipher/sec.sock (0600 perms)
-✓ Started cipher-mem     ➔ /tmp/cipher/mem.sock (0600 perms)
-✓ Started cipher-exec    ➔ /tmp/cipher/exec.sock (0600 perms)
-✓ Started cipher-mcp     ➔ /tmp/cipher/mcp.sock (0600 perms)
-✓ Started cipher-core    ➔ /tmp/cipher/core.sock (0600 perms)
-✓ Started cipher-route   ➔ Ingress :8080
+✓ Socket cage: /tmp/cipher (0700)
+✓ Started cipher-log     -> /tmp/cipher/log.sock (0600)
+✓ Started cipher-sec     -> /tmp/cipher/sec.sock (0600)
+✓ Started cipher-mem     -> /tmp/cipher/mem.sock (0600)
+✓ Started cipher-exec    -> /tmp/cipher/exec.sock (0600)
+✓ Started cipher-mcp     -> /tmp/cipher/mcp.sock (0600)
+✓ Started cipher-core    -> /tmp/cipher/core.sock (0600)
+✓ Started cipher-route   -> http://localhost:8080
 
-==================================================
-🎉 CIPHER 10/10 APPLIANCE READY in 38ms
-==================================================
-• Unified Ingress:       http://localhost:8080 (Zero-Port Sprawl)
-• War Room Cyber-HUD:    http://localhost:8080/hud
-• Merkle Audit Proof:    http://localhost:8080/verify-audit-chain
-• Cluster Topology:      http://localhost:8080/cluster/status
-• Internal IPC:          unix:///tmp/cipher/*.sock
+Appliance running (boot time: 38ms)
+• Ingress:      http://localhost:8080
+• Web HUD:      http://localhost:8080/hud
+• Cluster:      http://localhost:8080/cluster/status
+• Audit Proof:  http://localhost:8080/verify-audit-chain
 ==================================================
 ```
 
-### Run Synthetic Integration Verification
+### Run Synthetic Integration Tests
+
+Runs the 4-gate verification suite against the running cluster:
+
 ```bash
 cipher test
 ```
-*Verifies all 4 security and self-healing gates:*
-```text
-[GATE 1] Testing Semantic Firewall (cipher-sec :8079)...
-   ✓ Gate 1 PASSED: Credential AKIA... intercepted & redacted in 1.46ms
 
-[GATE 2] Testing Execution Sandbox Process Ceiling (cipher-exec :8081)...
-   ✓ Gate 2 PASSED: Runaway compute killed via isolation (native-seatbelt) in 3.003s (ceiling <= 5s)
+Verification assertions:
+* Gate 1: `cipher-sec` catches AWS credentials and redacts them in $<2\text{ms}$.
+* Gate 2: `cipher-exec` terminates a runaway computation in $\le 3003\text{ms}$ with exit code `-1`.
+* Gate 3: `cipher-mem` matches incident post-mortems via vector similarity in $<1\text{ms}$.
+* Gate 4: `cipher-log` confirms SHA-256 Merkle chain integrity without tampering.
 
-[GATE 3] Polling Neural Memory & Obsidian Vault (cipher-mem :8083)...
-   ✓ Gate 3 PASSED: Verified incident post-mortem [[INC-*-resolution.md]] resolved in 801µs
+### Update Binary
 
-[GATE 4] Verifying Cryptographic Merkle Hash Chain (cipher-log :8082 / :8080)...
-   ✓ Gate 4 PASSED: Merkle chain verified untampered in 569µs
+Checks GitHub Releases, verifies the SHA-256 manifest, and swaps the binary in place:
 
-🎉 SYNTHETIC FLEET INTEGRATION TEST PASSED (All 4 verification gates satisfied)
-```
-
-### Self-Update from GitHub Releases
 ```bash
 cipher update
 ```
 
 ---
 
-## 🏛️ System Architecture
+## Architecture
 
 ```text
-                               +-----------------------------+
-                               |     Client / AI Agent       |
-                               | (Claude, Cursor, CLI, HUD)  |
-                               +--------------+--------------+
-                                              |
-                                HTTP :8080 (Bearer Token)
-                                              v
-                      +-----------------------------------------------+
-                      |                  cipher-route                 |
-                      |   • Ingress Reverse Proxy & Port Aggregator   |
-                      |   • Semantic Vector Cache (0.5ms Response)    |
-                      |   • Real Cloud Circuit Breaker (Groq/OpenAI)  |
-                      |   • Zero-Trust Session Secret (~/.cipher)     |
-                      +-------+-----------+-----------+-------+-------+
-                              |           |           |       |
-            +-----------------+           |           |       +-----------------+
-            |                             |           |                         |
-unix:///tmp/cipher/sec.sock   unix:///tmp/cipher/exec.sock  unix:///tmp/cipher/mem.sock  unix:///tmp/cipher/log.sock
-            |                             |           |                         |
-            v                             v           v                         v
-     +--------------+              +--------------+  +--------------+    +--------------+
-     |  cipher-sec  |              | cipher-exec  |  |  cipher-mem  |    |  cipher-log  |
-     | • WAF Filter |              | • Seatbelt   |  | • Vector KB  |    | • Merkle Tree|
-     | • Redaction  |              | • 3s Timeout |  | • Obsidian   |    | • SQLite WAL |
-     +--------------+              +--------------+  +--------------+    +--------------+
-                                          ^                 ^
-                                          |                 |
-                             +------------+-----------------+------------+
-                             |                cipher-core                |
-                             |  • 5-Node Autonomous Remediation Machine  |
-                             |  • Telemetry -> Retrieve -> Fix -> Test   |
-                             +--------------------+----------------------+
-                                                  |
-                                                  v
-                                     unix:///tmp/cipher/mcp.sock
-                                     +---------------------------+
-                                     |        cipher-mcp         |
-                                     |  • Native Go MCP Server   |
-                                     |  • JSON-RPC 2.0 Tools     |
-                                     +---------------------------+
+                     Client / Agent (Claude, Cursor, CLI)
+                                      |
+                           HTTP :8080 (Bearer Token)
+                                      v
+                                 cipher-route
+                     (Ingress Proxy, Semantic Cache, Auth)
+                                      |
+         +----------------+-----------+-----------+----------------+
+         |                |                       |                |
+  /tmp/cipher/        /tmp/cipher/            /tmp/cipher/     /tmp/cipher/
+    sec.sock            exec.sock               mem.sock         log.sock
+         |                |                       |                |
+         v                v                       v                v
+    cipher-sec       cipher-exec             cipher-mem       cipher-log
+   (Firewall &       (Seatbelt &             (Obsidian &      (Merkle &
+    Redaction)        Sandbox)              Vector Search)    SQLite WAL)
+                          ^                       ^
+                          |                       |
+                          +-----------+-----------+
+                                      |
+                                 cipher-core
+                        (Self-Healing State Machine)
+                                      |
+                          /tmp/cipher/mcp.sock
+                                      v
+                                 cipher-mcp
+                           (Go MCP JSON-RPC Server)
 ```
 
 ---
 
-## 📦 The 8 Pure-Go Microservices
+## Cluster Services
 
-All 8 repositories are public, standalone, and compile with standard `go build .`:
+All 8 services are standalone Go repositories:
 
-| Service | Repository Link | Description | Stack |
-| :--- | :--- | :--- | :--- |
-| **`cipher-cli`** | [`sshloktiwarii/cipher-cli`](https://github.com/sshloktiwarii/cipher-cli) | Master supervisor, CLI control plane, self-updater & Homebrew formula. | Go, Cobra |
-| **`cipher-route`** | [`sshloktiwarii/cipher-route`](https://github.com/sshloktiwarii/cipher-route) | Unified ingress gateway, semantic cache, circuit breaker & Cockpit HUD. | Go, HTTP, Embedded HUD |
-| **`cipher-exec`** | [`sshloktiwarii/cipher-exec`](https://github.com/sshloktiwarii/cipher-exec) | Kernel-level ephemeral sandbox (Darwin Seatbelt & Linux namespaces). | Go, Seatbelt |
-| **`cipher-mcp`** | [`sshloktiwarii/cipher-mcp`](https://github.com/sshloktiwarii/cipher-mcp) | Model Context Protocol server exposing isolated tools to LLMs. | Go, JSON-RPC 2.0, SQLite |
-| **`cipher-core`** | [`sshloktiwarii/cipher-core`](https://github.com/sshloktiwarii/cipher-core) | 5-node autonomous self-healing state machine. | Go State Machine |
-| **`cipher-sec`** | [`sshloktiwarii/cipher-sec`](https://github.com/sshloktiwarii/cipher-sec) | Semantic firewall, WAF regex & Shannon entropy secret interceptor. | Go, Regex Engine |
-| **`cipher-mem`** | [`sshloktiwarii/cipher-mem`](https://github.com/sshloktiwarii/cipher-mem) | Obsidian vault watcher, vector embedding store & graph visualizer. | Go, fsnotify, Cosine Sim |
-| **`cipher-log`** | [`sshloktiwarii/cipher-log`](https://github.com/sshloktiwarii/cipher-log) | Cryptographic append-only SHA-256 Merkle tree audit ledger. | Go, SQLite WAL, Merkle |
-
----
-
-## 🔒 Zero-Trust Security Invariants
-
-1. **Local Authentication Boundary**: On first boot, Cipher generates a 256-bit cryptographic secret in `~/.cipher/token` (`0600` permissions). All external HTTP calls to `/v1/chat/completions` or internal proxy routes require `Authorization: Bearer <token>`.
-2. **Unix Domain Sockets (`0600`)**: Internal IPC takes place over `/tmp/cipher/*.sock`. File permissions are strictly pinned to `srw-------`, preventing other unprivileged local host processes from interacting with the backend cluster.
-3. **Zero Hardcoded Mocks**: All circuit breakers fall back to real cloud providers (Groq/OpenAI) or return structured HTTP 503 errors when local models are down.
+| Service | Repository | Role |
+| :--- | :--- | :--- |
+| `cipher-cli` | [sshloktiwarii/cipher-cli](https://github.com/sshloktiwarii/cipher-cli) | Supervisor, CLI commands, self-update engine |
+| `cipher-route` | [sshloktiwarii/cipher-route](https://github.com/sshloktiwarii/cipher-route) | HTTP ingress gateway, semantic cache, circuit breaker |
+| `cipher-sec` | [sshloktiwarii/cipher-sec](https://github.com/sshloktiwarii/cipher-sec) | Regex and Shannon entropy secret redaction |
+| `cipher-exec` | [sshloktiwarii/cipher-exec](https://github.com/sshloktiwarii/cipher-exec) | Seatbelt/namespace sandbox with 3s hard kill ceiling |
+| `cipher-mem` | [sshloktiwarii/cipher-mem](https://github.com/sshloktiwarii/cipher-mem) | Obsidian vault parser, vector index, cosine similarity |
+| `cipher-log` | [sshloktiwarii/cipher-log](https://github.com/sshloktiwarii/cipher-log) | High-throughput telemetry and Merkle audit chain |
+| `cipher-mcp` | [sshloktiwarii/cipher-mcp](https://github.com/sshloktiwarii/cipher-mcp) | Model Context Protocol JSON-RPC 2.0 tool provider |
+| `cipher-core` | [sshloktiwarii/cipher-core](https://github.com/sshloktiwarii/cipher-core) | 5-stage self-healing state machine |
 
 ---
 
-## 🛠️ CLI Commands Reference
+## Command Reference
 
-```bash
-cipher appliance          # Boots all 8 services in a single supervised process
-cipher test --synthetic   # Runs the 4-gate integration verification test
-cipher update             # In-place self update from GitHub Releases
-cipher doctor             # Pre-flight host resource and socket audit
-cipher status             # Displays health and port status across all services
-cipher halt               # Gracefully reaps supervised processes and cleans sockets
-```
+| Command | Description |
+| :--- | :--- |
+| `cipher appliance` | Starts all 8 cluster services under supervised process management. |
+| `cipher test` | Runs the 4-gate integration suite against the active cluster. |
+| `cipher update` | Checks GitHub Releases and performs an in-place binary update. |
+| `cipher doctor` | Audits port availability, socket paths, and host memory. |
+| `cipher status` | Checks health and connection mode for all services. |
+| `cipher halt` | Reaps child processes and clears socket files. |
 
 ---
 
-## 📄 License
+## License
 
-MIT License © 2026 [Shlok Tiwari](https://github.com/sshloktiwarii). Contributions welcome!
+MIT License. Copyright (c) 2026 Shlok Tiwari.
