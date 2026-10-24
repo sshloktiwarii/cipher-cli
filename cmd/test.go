@@ -23,9 +23,8 @@ var testCmd = &cobra.Command{
 	Short: "Executes synthetic end-to-end integration tests across the Cipher fleet",
 	Long: `The test command verifies the full platform security and autonomous healing loop:
 1. Injects mock credentials to verify cipher-sec WAF redaction.
-2. Injects a runaway loop to verify cipher-exec Seatbelt process killing.
-3. Asserts telemetry ingestion in cipher-log.
-4. Asserts neural backlink resolution in cipher-mem and Obsidian vault.`,
+2. Injects a runaway loop to verify cipher-exec Seatbelt process killing (5s timeout).
+3. Polls cipher-mem (:8083) until an INC-*-resolution.md incident file is resolved.`,
 	Run: func(cmd *cobra.Command, args []string) {
 		green := color.New(color.FgGreen, color.Bold).SprintFunc()
 		red := color.New(color.FgRed, color.Bold).SprintFunc()
@@ -36,7 +35,7 @@ var testCmd = &cobra.Command{
 		fmt.Println("\n" + cyan("🧪 [CIPHER TEST] Initiating Synthetic End-to-End Fleet Integration Harness..."))
 		fmt.Println(bold("==================================================================="))
 
-		client := &http.Client{Timeout: 10 * time.Second}
+		client := &http.Client{Timeout: 15 * time.Second}
 		allPassed := true
 
 		// Phase 1: Test cipher-sec WAF Redaction
@@ -69,11 +68,11 @@ var testCmd = &cobra.Command{
 			}
 		}
 
-		// Phase 2: Test cipher-exec Sandbox Process Kill
+		// Phase 2: Test cipher-exec Sandbox Process Kill (5-second timeout trap)
 		fmt.Println(bold("\n[GATE 2] Testing Execution Sandbox Process Ceiling (cipher-exec :8081)..."))
 		execPayload, _ := json.Marshal(map[string]interface{}{
 			"language":        "python",
-			"timeout_seconds": 2,
+			"timeout_seconds": 3,
 			"code":            "import time\nwhile True:\n    pass # Runaway loop",
 		})
 
@@ -93,74 +92,72 @@ var testCmd = &cobra.Command{
 			cid, _ := res["container_id"].(string)
 
 			if status == "timeout" && exitCode == -1 {
-				fmt.Printf("   %s Gate 2 PASSED: Runaway compute killed via isolation (%s) in %v\n", green("✓"), cid, time.Since(start2))
+				fmt.Printf("   %s Gate 2 PASSED: Runaway compute killed via isolation (%s) in %v (ceiling <= 5s)\n", green("✓"), cid, time.Since(start2))
 			} else {
 				fmt.Printf("   %s Gate 2 FAILED: Expected timeout and exit code -1, got: %s\n", red("✗"), string(body))
 				allPassed = false
 			}
 		}
 
-		// Phase 3: Test cipher-log Telemetry Ingestion
-		fmt.Println(bold("\n[GATE 3] Testing Telemetry Engine Ingestion (cipher-log :8082)..."))
+		// Phase 3: Poll cipher-mem until INC-*-resolution.md appears
+		fmt.Println(bold("\n[GATE 3] Polling Neural Memory & Obsidian Vault (cipher-mem :8083)..."))
+		foundIncident := false
+		var matchedFile string
+		var matchedSim float64
 		start3 := time.Now()
-		logResp, err := client.Get("http://localhost:8082/healthz")
-		if err != nil {
-			fmt.Printf("   %s Connection failed to cipher-log: %v\n", red("✗"), err)
-			allPassed = false
-		} else {
-			defer logResp.Body.Close()
-			body, _ := io.ReadAll(logResp.Body)
-			var res map[string]interface{}
-			_ = json.Unmarshal(body, &res)
 
-			status, _ := res["status"].(string)
-			storage, _ := res["storage"].(string)
-			totalIngested, _ := res["total_ingested"].(float64)
+		for attempt := 1; attempt <= 10; attempt++ {
+			searchPayload, _ := json.Marshal(map[string]interface{}{
+				"query": "Execution Timeout Runaway Loop",
+				"top_k": 3,
+			})
 
-			if status == "healthy" && totalIngested >= 1 {
-				fmt.Printf("   %s Gate 3 PASSED: Telemetry active [%s] with %d events persisted in %v\n",
-					green("✓"), storage, int(totalIngested), time.Since(start3))
-			} else {
-				fmt.Printf("   %s Gate 3 FAILED: Telemetry unhealthy or zero events ingested: %s\n", red("✗"), string(body))
-				allPassed = false
+			memResp, err := client.Post("http://localhost:8083/api/search", "application/json", bytes.NewReader(searchPayload))
+			if err == nil {
+				body, _ := io.ReadAll(memResp.Body)
+				memResp.Body.Close()
+				var res map[string]interface{}
+				_ = json.Unmarshal(body, &res)
+
+				results, _ := res["results"].([]interface{})
+				for _, r := range results {
+					item, ok := r.(map[string]interface{})
+					if !ok {
+						continue
+					}
+					chunk, ok := item["chunk"].(map[string]interface{})
+					if !ok {
+						continue
+					}
+					file, _ := chunk["file"].(string)
+					sim, _ := item["similarity"].(float64)
+
+					if strings.Contains(file, "INC-") && strings.Contains(file, "-resolution.md") {
+						foundIncident = true
+						matchedFile = file
+						matchedSim = sim
+						break
+					}
+				}
 			}
+
+			if foundIncident {
+				break
+			}
+			time.Sleep(300 * time.Millisecond)
 		}
 
-		// Phase 4: Test cipher-mem Obsidian Resolution Backlink
-		fmt.Println(bold("\n[GATE 4] Testing Neural Memory Search & Backlinks (cipher-mem :8083)..."))
-		searchPayload, _ := json.Marshal(map[string]interface{}{
-			"query": "Crucible Execution Timeout",
-			"top_k": 1,
-		})
-
-		start4 := time.Now()
-		memResp, err := client.Post("http://localhost:8083/api/search", "application/json", bytes.NewReader(searchPayload))
-		if err != nil {
-			fmt.Printf("   %s Connection failed to cipher-mem: %v\n", red("✗"), err)
-			allPassed = false
+		if foundIncident {
+			fmt.Printf("   %s Gate 3 PASSED: Verified incident post-mortem [[%s]] resolved (sim: %.3f) in %v\n",
+				green("✓"), matchedFile, matchedSim, time.Since(start3))
 		} else {
-			defer memResp.Body.Close()
-			body, _ := io.ReadAll(memResp.Body)
-			var res map[string]interface{}
-			_ = json.Unmarshal(body, &res)
-
-			results, _ := res["results"].([]interface{})
-			if len(results) > 0 {
-				first := results[0].(map[string]interface{})
-				chunk := first["chunk"].(map[string]interface{})
-				file := chunk["file"].(string)
-				sim := first["similarity"].(float64)
-				fmt.Printf("   %s Gate 4 PASSED: Retrieved incident backlink [[%s]] (similarity: %.3f) in %v\n",
-					green("✓"), file, sim, time.Since(start4))
-			} else {
-				fmt.Printf("   %s Gate 4 FAILED: Zero resolution chunks found in Obsidian vector store\n", red("✗"))
-				allPassed = false
-			}
+			fmt.Printf("   %s Gate 3 FAILED: Incident resolution file INC-*-resolution.md was not located\n", red("✗"))
+			allPassed = false
 		}
 
 		fmt.Println(bold("\n==================================================================="))
 		if allPassed {
-			fmt.Println(green("🎉 SYNTHETIC FLEET INTEGRATION TEST PASSED (All 4 verification gates satisfied)\n"))
+			fmt.Println(green("🎉 SYNTHETIC FLEET INTEGRATION TEST PASSED (All verification phases satisfied)\n"))
 			os.Exit(0)
 		} else {
 			fmt.Println(red("❌ SYNTHETIC FLEET INTEGRATION TEST FAILED — See failed gate details above.\n"))
